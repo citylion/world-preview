@@ -6,6 +6,7 @@ import caeruleusTait.world.preview.client.gui.widgets.SelectionSlider;
 import caeruleusTait.world.preview.client.gui.widgets.WGLabel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Checkbox;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.tabs.GridLayoutTab;
 import net.minecraft.client.gui.layouts.GridLayout;
@@ -33,6 +34,10 @@ import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_SHOW_IN_MENU_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_SHOW_PLAYER;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_SHOW_PLAYER_TOOLTIP;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_WORLDBORDER;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_WORLDBORDER_RADIUS;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_WORLDBORDER_RADIUS_TOOLTIP;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_WORLDBORDER_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_STRUCT;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_STRUCT_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_THREADS_TOOLTIP;
@@ -70,6 +75,23 @@ public class GeneralTab extends GridLayoutTab {
         Checkbox cbPause  = Checkbox.builder(SETTINGS_GENERAL_SHOW_IN_MENU, minecraft.font).selected(cfg.showInPauseMenu          ).onValueChange((box, val) -> cfg.showInPauseMenu           = val).build();
         Checkbox cbPlayer = Checkbox.builder(SETTINGS_GENERAL_SHOW_PLAYER,  minecraft.font).selected(cfg.showPlayer               ).onValueChange((box, val) -> cfg.showPlayer                = val).build();
 
+        EditBox worldBorderRadius = new EditBox(minecraft.font, 0, 0, 100, LINE_HEIGHT, SETTINGS_GENERAL_WORLDBORDER_RADIUS);
+        worldBorderRadius.setFilter(GeneralTab::isInteger);
+        worldBorderRadius.setValue(String.valueOf(cfg.worldBorderRadius));
+        worldBorderRadius.setResponder(x -> cfg.worldBorderRadius = parseRadius(x, cfg.worldBorderRadius));
+        worldBorderRadius.setTooltip(Tooltip.create(SETTINGS_GENERAL_WORLDBORDER_RADIUS_TOOLTIP));
+        WGLabel worldBorderRadiusLabel = new WGLabel(minecraft.font, 0, 0, 160, LINE_HEIGHT, WGLabel.TextAlignment.LEFT, SETTINGS_GENERAL_WORLDBORDER_RADIUS, 0xFFFFFF);
+        worldBorderRadiusLabel.setTooltip(Tooltip.create(SETTINGS_GENERAL_WORLDBORDER_RADIUS_TOOLTIP));
+
+        Checkbox cbWorldBorder = Checkbox.builder(SETTINGS_GENERAL_WORLDBORDER, minecraft.font)
+                .selected(cfg.worldBorderEnabled)
+                .onValueChange((box, val) -> {
+                    cfg.worldBorderEnabled = val;
+                    worldBorderRadius.active = val;
+                })
+                .build();
+        worldBorderRadius.active = cfg.worldBorderEnabled;
+
         threadsSlider.setTooltip(Tooltip.create(SETTINGS_GENERAL_THREADS_TOOLTIP));
         cbFc.setTooltip(Tooltip.create(SETTINGS_GENERAL_FC_TOOLTIP));
         cbBg.setTooltip(Tooltip.create(SETTINGS_GENERAL_BG_TOOLTIP));
@@ -77,6 +99,7 @@ public class GeneralTab extends GridLayoutTab {
         cbHm.setTooltip(Tooltip.create(SETTINGS_GENERAL_HEIGHTMAP_TOOLTIP));
         cbInt.setTooltip(Tooltip.create(SETTINGS_GENERAL_INTERSECT_TOOLTIP));
         cbNoise.setTooltip(Tooltip.create(SETTINGS_GENERAL_NOISE_TOOLTIP));
+        cbWorldBorder.setTooltip(Tooltip.create(SETTINGS_GENERAL_WORLDBORDER_TOOLTIP));
         cbCtrl.setTooltip(Tooltip.create(SETTINGS_GENERAL_CONTROLS_TOOLTIP));
         cbFt.setTooltip(Tooltip.create(SETTINGS_GENERAL_FRAMETIME_TOOLTIP));
         cbPause.setTooltip(Tooltip.create(SETTINGS_GENERAL_SHOW_IN_MENU_TOOLTIP));
@@ -91,11 +114,38 @@ public class GeneralTab extends GridLayoutTab {
         rowHelper.addChild(cbHm, 1);
         rowHelper.addChild(cbInt, 1);
         rowHelper.addChild(cbNoise, 1);
+        rowHelper.addChild(cbWorldBorder, 2);
+        rowHelper.addChild(worldBorderRadiusLabel);
+        rowHelper.addChild(worldBorderRadius);
         rowHelper.addChild(new WGLabel(minecraft.font, 0, 0, 200, LINE_HEIGHT / 10, WGLabel.TextAlignment.CENTER, Component.literal(""), 0xFFFFFF), 2);
         rowHelper.addChild(cbCtrl);
         rowHelper.addChild(cbFt);
         rowHelper.addChild(cbPause);
         rowHelper.addChild(cbPlayer);
+    }
+
+    private static boolean isInteger(String s) {
+        if (s.isBlank()) {
+            return true;
+        }
+        try {
+            Integer.parseInt(s);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    private static int parseRadius(String s, int fallback) {
+        if (s.isBlank()) {
+            return fallback;
+        }
+        try {
+            int value = Integer.parseInt(s);
+            return Math.max(10000, Math.min(20000, value));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     public static class ThreadCount implements SelectionSlider.SelectionValues {

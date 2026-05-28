@@ -47,6 +47,8 @@ import static caeruleusTait.world.preview.client.WorldPreviewComponents.MSG_ERRO
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.MSG_PREVIEW_SETUP_LOADING;
 
 public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
+    private static final int WORLD_BORDER_MASK_COLOR = 0xFF4C4C4C;
+
     private final Minecraft minecraft;
     private final PreviewDisplayDataProvider dataProvider;
     private final WorkManager workManager;
@@ -416,59 +418,68 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
 
         final int quartExpand = renderSettings.quartExpand();
         final int quartStride = renderSettings.quartStride();
+        final long worldBorderRadiusSquared = worldBorderRadiusSquared();
+        final boolean limitToWorldBorder = worldBorderRadiusSquared > 0;
+        final int worldBorderStepBlocks = QuartPos.SIZE * quartStride;
 
         // Render the biomes / heightmap
         for (RenderHelper r : renderData) {
             // Reset icon coords to the current section
             texX = r.sectionStartTexX;
+            final int minBlockZ = limitToWorldBorder ? QuartPos.toBlock(r.accessData.minZ()) + (worldBorderStepBlocks / 2) : 0;
 
             // Draw all the relevant data in the section
             for(int x = r.accessData.minX(); x < r.accessData.maxX(); x += quartStride) {
                 texZ = r.sectionStartTexZ;
+                int blockX = limitToWorldBorder ? QuartPos.toBlock(x) + (worldBorderStepBlocks / 2) : 0;
+                int blockZ = minBlockZ;
                 for (int z = r.accessData.minZ(); z < r.accessData.maxZ(); z += quartStride) {
-
-                    // Read the biome data
-                    short rawData = r.dataSection.get(x, z);
-                    int color = 0xFF000000;
-                    switch (renderSettings.mode) {
-                        case BIOMES -> {
-                            if (rawData >= 0) {
-                                color = selectedBiomeId >= 0 || highlightCaves ? colorMapGrayScale[rawData] : colorMap[rawData];
-                                if (selectedBiomeId == rawData || (highlightCaves && cavesMap[rawData])) {
-                                    color = colorMap[rawData];
+                    boolean outsideWorldBorder = limitToWorldBorder && isOutsideWorldBorder(worldBorderRadiusSquared, blockX, blockZ);
+                    int color = WORLD_BORDER_MASK_COLOR;
+                    if (!outsideWorldBorder) {
+                        // Read the biome data
+                        short rawData = r.dataSection.get(x, z);
+                        color = 0xFF000000;
+                        switch (renderSettings.mode) {
+                            case BIOMES -> {
+                                if (rawData >= 0) {
+                                    color = selectedBiomeId >= 0 || highlightCaves ? colorMapGrayScale[rawData] : colorMap[rawData];
+                                    if (selectedBiomeId == rawData || (highlightCaves && cavesMap[rawData])) {
+                                        color = colorMap[rawData];
+                                    }
+                                    workingVisibleBiomes[rawData] += 1;
                                 }
-                                workingVisibleBiomes[rawData] += 1;
                             }
-                        }
-                        case HEIGHTMAP -> {
-                            if (rawData > Short.MIN_VALUE) {
-                                color = heightColorMap[rawData - dataProvider.yMin()];
+                            case HEIGHTMAP -> {
+                                if (rawData > Short.MIN_VALUE) {
+                                    color = heightColorMap[rawData - dataProvider.yMin()];
+                                }
                             }
-                        }
-                        case INTERSECTIONS -> {
-                            if (rawData >= 0) {
-                                // Main y-intersection
-                                color = MapColor.byId(rawData).col;
-                                color = textureColor(color == 0 ? 0xFFFFFF : color);
-                            } else if(rawData > Short.MIN_VALUE) {
-                                // See through one layer of air
-                                color = MapColor.byId(-rawData).col;
-                                color = highlightColor(textureColor(color == 0 ? 0xFFFFFF : color));
+                            case INTERSECTIONS -> {
+                                if (rawData >= 0) {
+                                    // Main y-intersection
+                                    color = MapColor.byId(rawData).col;
+                                    color = textureColor(color == 0 ? 0xFFFFFF : color);
+                                } else if(rawData > Short.MIN_VALUE) {
+                                    // See through one layer of air
+                                    color = MapColor.byId(-rawData).col;
+                                    color = highlightColor(textureColor(color == 0 ? 0xFFFFFF : color));
+                                }
                             }
-                        }
-                        case NOISE_TEMPERATURE, NOISE_HUMIDITY, NOISE_CONTINENTALNESS, NOISE_EROSION, NOISE_DEPTH, NOISE_WEIRDNESS -> {
-                            if (rawData > Short.MIN_VALUE) {
-                                final float data = ((float) rawData) / ((float) Short.MAX_VALUE);
-                                final int idx = Math.min(1023, Math.max(0, 512 + (int) (data * 512)));
-                                color = noiseColorMap[idx];
+                            case NOISE_TEMPERATURE, NOISE_HUMIDITY, NOISE_CONTINENTALNESS, NOISE_EROSION, NOISE_DEPTH, NOISE_WEIRDNESS -> {
+                                if (rawData > Short.MIN_VALUE) {
+                                    final float data = ((float) rawData) / ((float) Short.MAX_VALUE);
+                                    final int idx = Math.min(1023, Math.max(0, 512 + (int) (data * 512)));
+                                    color = noiseColorMap[idx];
+                                }
                             }
-                        }
-                        case NOISE_PEAKS_AND_VALLEYS -> {
-                            if (rawData > Short.MIN_VALUE) {
-                                final float data = ((float) rawData) / 0.75f / ((float) Short.MAX_VALUE);
-                                final float pvData = NoiseRouterData.peaksAndValleys(Math.min(1.0f, Math.max(-1.0f, data)));
-                                final int idx = Math.min(1023, Math.max(0, 512 + (int) (pvData * 512)));
-                                color = noiseColorMap[idx];
+                            case NOISE_PEAKS_AND_VALLEYS -> {
+                                if (rawData > Short.MIN_VALUE) {
+                                    final float data = ((float) rawData) / 0.75f / ((float) Short.MAX_VALUE);
+                                    final float pvData = NoiseRouterData.peaksAndValleys(Math.min(1.0f, Math.max(-1.0f, data)));
+                                    final int idx = Math.min(1023, Math.max(0, 512 + (int) (pvData * 512)));
+                                    color = noiseColorMap[idx];
+                                }
                             }
                         }
                     }
@@ -487,6 +498,9 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
                     }
 
                     texZ += quartExpand;
+                    if (limitToWorldBorder) {
+                        blockZ += worldBorderStepBlocks;
+                    }
                 }
                 texX += quartExpand;
             }
@@ -500,12 +514,16 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
             return;
         }
 
+        final long worldBorderRadiusSquared = worldBorderRadiusSquared();
         final double guiScale = minecraft.getWindow().getGuiScale();
 
         // Draw structures
         //  - Do this in a separate RenderHelper loop to ensure that the biome data is overwritten
         for (RenderHelper r : renderData) {
             for (PreviewSection.PreviewStruct structure : r.structureSection.structures()) {
+                if (worldBorderRadiusSquared > 0 && isOutsideWorldBorder(worldBorderRadiusSquared, structure.center().getX(), structure.center().getZ())) {
+                    continue;
+                }
                 short id = structure.structureId();
                 TextureCoordinate texCenter = blockToTexture(structure.center());
                 IconData iconData = structureIcons[id];
@@ -636,10 +654,16 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
 
         final int xPos = (int) ((mouseX - getX()) * guiScale * scaleBlockPos);
         final int zPos = (int) ((mouseY - getY()) * guiScale * scaleBlockPos);
+        final int blockX = xMin + xPos;
+        final int blockZ = zMin + zPos;
+        final long worldBorderRadiusSquared = worldBorderRadiusSquared();
+        if (worldBorderRadiusSquared > 0 && isOutsideWorldBorder(worldBorderRadiusSquared, blockX, blockZ)) {
+            return null;
+        }
 
-        int quartX = QuartPos.fromBlock(xMin + xPos);
+        int quartX = QuartPos.fromBlock(blockX);
         int quartY = QuartPos.fromBlock(center.getY());
-        int quartZ = QuartPos.fromBlock(zMin + zPos);
+        int quartZ = QuartPos.fromBlock(blockZ);
         short biome = workManager.previewStorage().getRawData4(quartX, quartY, quartZ, PreviewStorage.FLAG_BIOME);
         short height = workManager.previewStorage().getRawData4(quartX, 0, quartZ, PreviewStorage.FLAG_HEIGHT);
 
@@ -880,6 +904,26 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
         }
 
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    private long worldBorderRadiusSquared() {
+        if (!config.worldBorderEnabled) {
+            return -1;
+        }
+        int radius = config.worldBorderRadius;
+        if (radius <= 0) {
+            return -1;
+        }
+        return (long) radius * radius;
+    }
+
+    private static boolean isOutsideWorldBorder(long radiusSquared, int blockX, int blockZ) {
+        if (radiusSquared <= 0) {
+            return false;
+        }
+        long dx = blockX;
+        long dz = blockZ;
+        return (dx * dx + dz * dz) > radiusSquared;
     }
 
     private static int textureColor(int orig) {
