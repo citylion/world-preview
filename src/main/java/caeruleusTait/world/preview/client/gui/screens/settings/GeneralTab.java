@@ -45,6 +45,9 @@ import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS
 import static caeruleusTait.world.preview.client.gui.screens.PreviewContainer.LINE_HEIGHT;
 
 public class GeneralTab extends GridLayoutTab {
+    private static final int MIN_WORLD_BORDER_RADIUS = 10000;
+    private static final int MAX_WORLD_BORDER_RADIUS = 20000;
+
     public GeneralTab(Minecraft minecraft) {
         super(SETTINGS_GENERAL_TITLE);
 
@@ -142,7 +145,7 @@ public class GeneralTab extends GridLayoutTab {
         }
         try {
             int value = Integer.parseInt(s);
-            return Math.max(10000, Math.min(20000, value));
+            return Math.max(MIN_WORLD_BORDER_RADIUS, Math.min(MAX_WORLD_BORDER_RADIUS, value));
         } catch (NumberFormatException e) {
             return fallback;
         }
