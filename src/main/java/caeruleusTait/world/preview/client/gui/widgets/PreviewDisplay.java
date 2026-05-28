@@ -417,6 +417,10 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
         final int quartExpand = renderSettings.quartExpand();
         final int quartStride = renderSettings.quartStride();
 
+        // World border circle settings
+        final boolean worldBorderEnabled = config.enableWorldBorder;
+        final long worldBorderRadiusSq = (long) config.worldBorderRadius * config.worldBorderRadius;
+
         // Render the biomes / heightmap
         for (RenderHelper r : renderData) {
             // Reset icon coords to the current section
@@ -470,6 +474,22 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
                                 final int idx = Math.min(1023, Math.max(0, 512 + (int) (pvData * 512)));
                                 color = noiseColorMap[idx];
                             }
+                        }
+                    }
+
+                    // Apply world border circle overlay: darken pixels outside the radius
+                    if (worldBorderEnabled) {
+                        long blockX = (long) QuartPos.toBlock(x);
+                        long blockZ = (long) QuartPos.toBlock(z);
+                        if (blockX * blockX + blockZ * blockZ > worldBorderRadiusSq) {
+                            // Darken the color (blend with black at 70%)
+                            int R = color & 0xFF;
+                            int G = (color >> 8) & 0xFF;
+                            int B = (color >> 16) & 0xFF;
+                            R = R * 3 / 10;
+                            G = G * 3 / 10;
+                            B = B * 3 / 10;
+                            color = (0xFF << 24) | (B << 16) | (G << 8) | R;
                         }
                     }
 

@@ -37,6 +37,8 @@ import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_STRUCT_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_THREADS_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_TITLE;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_WORLD_BORDER;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_WORLD_BORDER_TOOLTIP;
 import static caeruleusTait.world.preview.client.gui.screens.PreviewContainer.LINE_HEIGHT;
 
 public class GeneralTab extends GridLayoutTab {
@@ -69,6 +71,19 @@ public class GeneralTab extends GridLayoutTab {
         Checkbox cbFt     = Checkbox.builder(SETTINGS_GENERAL_FRAMETIME,    minecraft.font).selected(cfg.showFrameTime            ).onValueChange((box, val) -> cfg.showFrameTime             = val).build();
         Checkbox cbPause  = Checkbox.builder(SETTINGS_GENERAL_SHOW_IN_MENU, minecraft.font).selected(cfg.showInPauseMenu          ).onValueChange((box, val) -> cfg.showInPauseMenu           = val).build();
         Checkbox cbPlayer = Checkbox.builder(SETTINGS_GENERAL_SHOW_PLAYER,  minecraft.font).selected(cfg.showPlayer               ).onValueChange((box, val) -> cfg.showPlayer                = val).build();
+        Checkbox cbWorldBorder = Checkbox.builder(SETTINGS_GENERAL_WORLD_BORDER, minecraft.font).selected(cfg.enableWorldBorder).onValueChange((box, val) -> cfg.enableWorldBorder = val).build();
+
+        List<WorldBorderRadius> borderRadii = new ArrayList<>(30);
+        for (int i = 1000; i <= 30000; i += 1000) {
+            borderRadii.add(new WorldBorderRadius(i));
+        }
+        SelectionSlider<WorldBorderRadius> borderRadiusSlider = new SelectionSlider<>(
+                0, 0,
+                LINE_WIDTH, LINE_HEIGHT,
+                borderRadii,
+                borderRadii.get(Math.max(0, Math.min(borderRadii.size() - 1, (cfg.worldBorderRadius / 1000) - 1))),
+                x -> cfg.worldBorderRadius = x.value
+        );
 
         threadsSlider.setTooltip(Tooltip.create(SETTINGS_GENERAL_THREADS_TOOLTIP));
         cbFc.setTooltip(Tooltip.create(SETTINGS_GENERAL_FC_TOOLTIP));
@@ -81,6 +96,7 @@ public class GeneralTab extends GridLayoutTab {
         cbFt.setTooltip(Tooltip.create(SETTINGS_GENERAL_FRAMETIME_TOOLTIP));
         cbPause.setTooltip(Tooltip.create(SETTINGS_GENERAL_SHOW_IN_MENU_TOOLTIP));
         cbPlayer.setTooltip(Tooltip.create(SETTINGS_GENERAL_SHOW_PLAYER_TOOLTIP));
+        cbWorldBorder.setTooltip(Tooltip.create(SETTINGS_GENERAL_WORLD_BORDER_TOOLTIP));
 
         GridLayout.RowHelper rowHelper = layout.rowSpacing(4).createRowHelper(2);
         rowHelper.addChild(new WGLabel(minecraft.font, 0, 0, LINE_WIDTH, LINE_HEIGHT, WGLabel.TextAlignment.CENTER, SETTINGS_GENERAL_HEAD, 0xFFFFFF), 2);
@@ -96,6 +112,8 @@ public class GeneralTab extends GridLayoutTab {
         rowHelper.addChild(cbFt);
         rowHelper.addChild(cbPause);
         rowHelper.addChild(cbPlayer);
+        rowHelper.addChild(cbWorldBorder, 2);
+        rowHelper.addChild(borderRadiusSlider, 2);
     }
 
     public static class ThreadCount implements SelectionSlider.SelectionValues {
@@ -108,6 +126,19 @@ public class GeneralTab extends GridLayoutTab {
         @Override
         public Component message() {
             return Component.translatable("world_preview.settings.general.threads", value);
+        }
+    }
+
+    public static class WorldBorderRadius implements SelectionSlider.SelectionValues {
+        public final int value;
+
+        public WorldBorderRadius(int value) {
+            this.value = value;
+        }
+
+        @Override
+        public Component message() {
+            return Component.translatable("world_preview.settings.general.worldborder.radius", value);
         }
     }
 }

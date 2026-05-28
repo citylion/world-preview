@@ -20,6 +20,8 @@ public class WorldPreviewConfig {
     public int heightmapMinY = 32;
     public int heightmapMaxY = 255;
     public boolean onlySampleInVisualRange = true;
+    public boolean enableWorldBorder = false;
+    public int worldBorderRadius = 10000;
     public boolean cacheInGame = true;
     public boolean cacheInNew = false;
     public boolean enableCompression = true;
