@@ -62,6 +62,9 @@ public class WorldPreviewComponents {
     public static final Component SETTINGS_GENERAL_SHOW_IN_MENU_TOOLTIP = Component.translatable("world_preview.settings.general.showinmenu.tooltip");
     public static final Component SETTINGS_GENERAL_SHOW_PLAYER = Component.translatable("world_preview.settings.general.showplayer");
     public static final Component SETTINGS_GENERAL_SHOW_PLAYER_TOOLTIP = Component.translatable("world_preview.settings.general.showplayer.tooltip");
+    public static final Component SETTINGS_GENERAL_WORLD_BORDER = Component.translatable("world_preview.settings.general.worldborder");
+    public static final Component SETTINGS_GENERAL_WORLD_BORDER_TOOLTIP = Component.translatable("world_preview.settings.general.worldborder.tooltip");
+    public static final Component SETTINGS_GENERAL_WORLD_BORDER_RADIUS_TOOLTIP = Component.translatable("world_preview.settings.general.worldborder.radius.tooltip");
 
 
     // - Sampling settings

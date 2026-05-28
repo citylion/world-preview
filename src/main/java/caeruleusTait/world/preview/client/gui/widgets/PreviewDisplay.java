@@ -47,6 +47,7 @@ import static caeruleusTait.world.preview.client.WorldPreviewComponents.MSG_ERRO
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.MSG_PREVIEW_SETUP_LOADING;
 
 public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
+    private static final int WORLD_BORDER_MASK_COLOR = 0xFF2F2F2F;
     private final Minecraft minecraft;
     private final PreviewDisplayDataProvider dataProvider;
     private final WorkManager workManager;
@@ -320,6 +321,20 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
         );
     }
 
+    private boolean isOutsideWorldBorder(int blockX, int blockZ) {
+        if (!config.worldBorderEnabled) {
+            return false;
+        }
+        int radius = config.worldBorderRadius;
+        if (radius <= 0) {
+            return false;
+        }
+        long dx = blockX;
+        long dz = blockZ;
+        long radiusSquared = (long) radius * radius;
+        return (dx * dx + dz * dz) > radiusSquared;
+    }
+
     private void putHoverStructEntry(TextureCoordinate pos, StructHoverHelperEntry entry) {
         int cellX = Math.max(0, Math.min(hoverHelperGridWidth - 1, pos.x / hoverHelperGridCellSize));
         int cellZ = Math.max(0, Math.min(hoverHelperGridHeight - 1, pos.z / hoverHelperGridCellSize));
@@ -425,50 +440,57 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
             // Draw all the relevant data in the section
             for(int x = r.accessData.minX(); x < r.accessData.maxX(); x += quartStride) {
                 texZ = r.sectionStartTexZ;
+                int globalQuartX = r.dataSection.quartX() + x;
+                int blockX = QuartPos.toBlock(globalQuartX);
                 for (int z = r.accessData.minZ(); z < r.accessData.maxZ(); z += quartStride) {
+                    int globalQuartZ = r.dataSection.quartZ() + z;
+                    int blockZ = QuartPos.toBlock(globalQuartZ);
 
-                    // Read the biome data
-                    short rawData = r.dataSection.get(x, z);
-                    int color = 0xFF000000;
-                    switch (renderSettings.mode) {
-                        case BIOMES -> {
-                            if (rawData >= 0) {
-                                color = selectedBiomeId >= 0 || highlightCaves ? colorMapGrayScale[rawData] : colorMap[rawData];
-                                if (selectedBiomeId == rawData || (highlightCaves && cavesMap[rawData])) {
-                                    color = colorMap[rawData];
+                    int color = WORLD_BORDER_MASK_COLOR;
+                    if (!isOutsideWorldBorder(blockX, blockZ)) {
+                        // Read the biome data
+                        short rawData = r.dataSection.get(x, z);
+                        color = 0xFF000000;
+                        switch (renderSettings.mode) {
+                            case BIOMES -> {
+                                if (rawData >= 0) {
+                                    color = selectedBiomeId >= 0 || highlightCaves ? colorMapGrayScale[rawData] : colorMap[rawData];
+                                    if (selectedBiomeId == rawData || (highlightCaves && cavesMap[rawData])) {
+                                        color = colorMap[rawData];
+                                    }
+                                    workingVisibleBiomes[rawData] += 1;
                                 }
-                                workingVisibleBiomes[rawData] += 1;
                             }
-                        }
-                        case HEIGHTMAP -> {
-                            if (rawData > Short.MIN_VALUE) {
-                                color = heightColorMap[rawData - dataProvider.yMin()];
+                            case HEIGHTMAP -> {
+                                if (rawData > Short.MIN_VALUE) {
+                                    color = heightColorMap[rawData - dataProvider.yMin()];
+                                }
                             }
-                        }
-                        case INTERSECTIONS -> {
-                            if (rawData >= 0) {
-                                // Main y-intersection
-                                color = MapColor.byId(rawData).col;
-                                color = textureColor(color == 0 ? 0xFFFFFF : color);
-                            } else if(rawData > Short.MIN_VALUE) {
-                                // See through one layer of air
-                                color = MapColor.byId(-rawData).col;
-                                color = highlightColor(textureColor(color == 0 ? 0xFFFFFF : color));
+                            case INTERSECTIONS -> {
+                                if (rawData >= 0) {
+                                    // Main y-intersection
+                                    color = MapColor.byId(rawData).col;
+                                    color = textureColor(color == 0 ? 0xFFFFFF : color);
+                                } else if(rawData > Short.MIN_VALUE) {
+                                    // See through one layer of air
+                                    color = MapColor.byId(-rawData).col;
+                                    color = highlightColor(textureColor(color == 0 ? 0xFFFFFF : color));
+                                }
                             }
-                        }
-                        case NOISE_TEMPERATURE, NOISE_HUMIDITY, NOISE_CONTINENTALNESS, NOISE_EROSION, NOISE_DEPTH, NOISE_WEIRDNESS -> {
-                            if (rawData > Short.MIN_VALUE) {
-                                final float data = ((float) rawData) / ((float) Short.MAX_VALUE);
-                                final int idx = Math.min(1023, Math.max(0, 512 + (int) (data * 512)));
-                                color = noiseColorMap[idx];
+                            case NOISE_TEMPERATURE, NOISE_HUMIDITY, NOISE_CONTINENTALNESS, NOISE_EROSION, NOISE_DEPTH, NOISE_WEIRDNESS -> {
+                                if (rawData > Short.MIN_VALUE) {
+                                    final float data = ((float) rawData) / ((float) Short.MAX_VALUE);
+                                    final int idx = Math.min(1023, Math.max(0, 512 + (int) (data * 512)));
+                                    color = noiseColorMap[idx];
+                                }
                             }
-                        }
-                        case NOISE_PEAKS_AND_VALLEYS -> {
-                            if (rawData > Short.MIN_VALUE) {
-                                final float data = ((float) rawData) / 0.75f / ((float) Short.MAX_VALUE);
-                                final float pvData = NoiseRouterData.peaksAndValleys(Math.min(1.0f, Math.max(-1.0f, data)));
-                                final int idx = Math.min(1023, Math.max(0, 512 + (int) (pvData * 512)));
-                                color = noiseColorMap[idx];
+                            case NOISE_PEAKS_AND_VALLEYS -> {
+                                if (rawData > Short.MIN_VALUE) {
+                                    final float data = ((float) rawData) / 0.75f / ((float) Short.MAX_VALUE);
+                                    final float pvData = NoiseRouterData.peaksAndValleys(Math.min(1.0f, Math.max(-1.0f, data)));
+                                    final int idx = Math.min(1023, Math.max(0, 512 + (int) (pvData * 512)));
+                                    color = noiseColorMap[idx];
+                                }
                             }
                         }
                     }
@@ -507,6 +529,9 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
         for (RenderHelper r : renderData) {
             for (PreviewSection.PreviewStruct structure : r.structureSection.structures()) {
                 short id = structure.structureId();
+                if (isOutsideWorldBorder(structure.center().getX(), structure.center().getZ())) {
+                    continue;
+                }
                 TextureCoordinate texCenter = blockToTexture(structure.center());
                 IconData iconData = structureIcons[id];
                 NativeImage icon = iconData.img;
@@ -579,6 +604,9 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
      * Render the player and spawn icons in double the size
      */
     private void renderStickyIcon(IconData iconData, BlockPos pos) {
+        if (isOutsideWorldBorder(pos.getX(), pos.getZ())) {
+            return;
+        }
         final double guiScale = minecraft.getWindow().getGuiScale();
         final NativeImage icon = iconData.img;
 
@@ -636,16 +664,21 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
 
         final int xPos = (int) ((mouseX - getX()) * guiScale * scaleBlockPos);
         final int zPos = (int) ((mouseY - getY()) * guiScale * scaleBlockPos);
+        final int blockX = xMin + xPos;
+        final int blockZ = zMin + zPos;
+        if (isOutsideWorldBorder(blockX, blockZ)) {
+            return null;
+        }
 
-        int quartX = QuartPos.fromBlock(xMin + xPos);
+        int quartX = QuartPos.fromBlock(blockX);
         int quartY = QuartPos.fromBlock(center.getY());
-        int quartZ = QuartPos.fromBlock(zMin + zPos);
+        int quartZ = QuartPos.fromBlock(blockZ);
         short biome = workManager.previewStorage().getRawData4(quartX, quartY, quartZ, PreviewStorage.FLAG_BIOME);
         short height = workManager.previewStorage().getRawData4(quartX, 0, quartZ, PreviewStorage.FLAG_HEIGHT);
 
         if (biome < 0) {
             return new HoverInfo(
-                    xMin + xPos, center.getY(), zMin + zPos, null, height,
+                    blockX, center.getY(), blockZ, null, height,
                     Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN
             );
         }
@@ -659,7 +692,7 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
 
         if (temperature == Short.MIN_VALUE && humidity == Short.MIN_VALUE && continentalness == Short.MIN_VALUE && erosion == Short.MIN_VALUE && depth == Short.MIN_VALUE && weirdness == Short.MIN_VALUE) {
             return new HoverInfo(
-                    xMin + xPos, center.getY(), zMin + zPos, dataProvider.biome4Id(biome), height,
+                    blockX, center.getY(), blockZ, dataProvider.biome4Id(biome), height,
                     Double.NaN,
                     Double.NaN,
                     Double.NaN,
@@ -670,7 +703,7 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
             );      
         } else {
             return new HoverInfo(
-                    xMin + xPos, center.getY(), zMin + zPos, dataProvider.biome4Id(biome), height,
+                    blockX, center.getY(), blockZ, dataProvider.biome4Id(biome), height,
                     temperature / 1.0 / Short.MAX_VALUE,
                     humidity / 1.0 / Short.MAX_VALUE,
                     continentalness / 0.5 / Short.MAX_VALUE,

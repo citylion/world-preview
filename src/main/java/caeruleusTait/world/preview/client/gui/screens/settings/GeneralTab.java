@@ -33,6 +33,9 @@ import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_SHOW_IN_MENU_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_SHOW_PLAYER;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_SHOW_PLAYER_TOOLTIP;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_WORLD_BORDER;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_WORLD_BORDER_RADIUS_TOOLTIP;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_WORLD_BORDER_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_STRUCT;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_STRUCT_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_THREADS_TOOLTIP;
@@ -51,12 +54,28 @@ public class GeneralTab extends GridLayoutTab {
         for (int i = 1; i <= Runtime.getRuntime().availableProcessors(); ++i) {
             threadCounts.add(new ThreadCount(i));
         }
+
+        List<WorldBorderRadius> borderRadii = new ArrayList<>();
+        for (int radius = 10000; radius <= 20000; radius += 1000) {
+            borderRadii.add(new WorldBorderRadius(radius));
+        }
+
+        WorldBorderRadius initialRadius = WorldBorderRadius.closestTo(cfg.worldBorderRadius, borderRadii);
+        cfg.worldBorderRadius = initialRadius.value;
+
         SelectionSlider<ThreadCount> threadsSlider = new SelectionSlider<>(
                 0, 0,
                 LINE_WIDTH, LINE_HEIGHT,
                 threadCounts,
                 threadCounts.get(cfg.numThreads() - 1),
                 x -> cfg.setNumThreads(x.value)
+        );
+        SelectionSlider<WorldBorderRadius> worldBorderRadiusSlider = new SelectionSlider<>(
+                0, 0,
+                LINE_WIDTH, LINE_HEIGHT,
+                borderRadii,
+                initialRadius,
+                x -> cfg.worldBorderRadius = x.value
         );
 
         Checkbox cbBg     = Checkbox.builder(SETTINGS_GENERAL_BG,           minecraft.font).selected(cfg.backgroundSampleVertChunk).onValueChange((box, val) -> cfg.backgroundSampleVertChunk = val).build();
@@ -65,6 +84,13 @@ public class GeneralTab extends GridLayoutTab {
         Checkbox cbHm     = Checkbox.builder(SETTINGS_GENERAL_HEIGHTMAP,    minecraft.font).selected(cfg.sampleHeightmap          ).onValueChange((box, val) -> cfg.sampleHeightmap           = val).build();
         Checkbox cbInt    = Checkbox.builder(SETTINGS_GENERAL_INTERSECT,    minecraft.font).selected(cfg.sampleIntersections      ).onValueChange((box, val) -> cfg.sampleIntersections       = val).build();
         Checkbox cbNoise  = Checkbox.builder(SETTINGS_GENERAL_NOISE,        minecraft.font).selected(cfg.storeNoiseSamples        ).onValueChange((box, val) -> cfg.storeNoiseSamples         = val).build();
+        Checkbox cbWorldBorder  = Checkbox.builder(SETTINGS_GENERAL_WORLD_BORDER, minecraft.font)
+                .selected(cfg.worldBorderEnabled)
+                .onValueChange((box, val) -> {
+                    cfg.worldBorderEnabled = val;
+                    worldBorderRadiusSlider.active = val;
+                })
+                .build();
         Checkbox cbCtrl   = Checkbox.builder(SETTINGS_GENERAL_CONTROLS,     minecraft.font).selected(cfg.showControls             ).onValueChange((box, val) -> cfg.showControls              = val).build();
         Checkbox cbFt     = Checkbox.builder(SETTINGS_GENERAL_FRAMETIME,    minecraft.font).selected(cfg.showFrameTime            ).onValueChange((box, val) -> cfg.showFrameTime             = val).build();
         Checkbox cbPause  = Checkbox.builder(SETTINGS_GENERAL_SHOW_IN_MENU, minecraft.font).selected(cfg.showInPauseMenu          ).onValueChange((box, val) -> cfg.showInPauseMenu           = val).build();
@@ -77,10 +103,14 @@ public class GeneralTab extends GridLayoutTab {
         cbHm.setTooltip(Tooltip.create(SETTINGS_GENERAL_HEIGHTMAP_TOOLTIP));
         cbInt.setTooltip(Tooltip.create(SETTINGS_GENERAL_INTERSECT_TOOLTIP));
         cbNoise.setTooltip(Tooltip.create(SETTINGS_GENERAL_NOISE_TOOLTIP));
+        cbWorldBorder.setTooltip(Tooltip.create(SETTINGS_GENERAL_WORLD_BORDER_TOOLTIP));
+        worldBorderRadiusSlider.setTooltip(Tooltip.create(SETTINGS_GENERAL_WORLD_BORDER_RADIUS_TOOLTIP));
         cbCtrl.setTooltip(Tooltip.create(SETTINGS_GENERAL_CONTROLS_TOOLTIP));
         cbFt.setTooltip(Tooltip.create(SETTINGS_GENERAL_FRAMETIME_TOOLTIP));
         cbPause.setTooltip(Tooltip.create(SETTINGS_GENERAL_SHOW_IN_MENU_TOOLTIP));
         cbPlayer.setTooltip(Tooltip.create(SETTINGS_GENERAL_SHOW_PLAYER_TOOLTIP));
+
+        worldBorderRadiusSlider.active = cfg.worldBorderEnabled;
 
         GridLayout.RowHelper rowHelper = layout.rowSpacing(4).createRowHelper(2);
         rowHelper.addChild(new WGLabel(minecraft.font, 0, 0, LINE_WIDTH, LINE_HEIGHT, WGLabel.TextAlignment.CENTER, SETTINGS_GENERAL_HEAD, 0xFFFFFF), 2);
@@ -91,6 +121,8 @@ public class GeneralTab extends GridLayoutTab {
         rowHelper.addChild(cbHm, 1);
         rowHelper.addChild(cbInt, 1);
         rowHelper.addChild(cbNoise, 1);
+        rowHelper.addChild(cbWorldBorder, 2);
+        rowHelper.addChild(worldBorderRadiusSlider, 2);
         rowHelper.addChild(new WGLabel(minecraft.font, 0, 0, 200, LINE_HEIGHT / 10, WGLabel.TextAlignment.CENTER, Component.literal(""), 0xFFFFFF), 2);
         rowHelper.addChild(cbCtrl);
         rowHelper.addChild(cbFt);
@@ -108,6 +140,32 @@ public class GeneralTab extends GridLayoutTab {
         @Override
         public Component message() {
             return Component.translatable("world_preview.settings.general.threads", value);
+        }
+    }
+
+    public static class WorldBorderRadius implements SelectionSlider.SelectionValues {
+        public final int value;
+
+        public WorldBorderRadius(int value) {
+            this.value = value;
+        }
+
+        public static WorldBorderRadius closestTo(int value, List<WorldBorderRadius> radii) {
+            WorldBorderRadius closest = radii.get(0);
+            int bestDiff = Math.abs(value - closest.value);
+            for (WorldBorderRadius radius : radii) {
+                int diff = Math.abs(value - radius.value);
+                if (diff < bestDiff) {
+                    closest = radius;
+                    bestDiff = diff;
+                }
+            }
+            return closest;
+        }
+
+        @Override
+        public Component message() {
+            return Component.translatable("world_preview.settings.general.worldborder.radius", value);
         }
     }
 }

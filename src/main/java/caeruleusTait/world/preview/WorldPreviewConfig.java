@@ -11,6 +11,8 @@ public class WorldPreviewConfig {
     public boolean showPlayer = true;
     public boolean showControls = true;
     public boolean showFrameTime = false;
+    public boolean worldBorderEnabled = false;
+    public int worldBorderRadius = 10000;
     public boolean buildFullVertChunk = false;
     public boolean backgroundSampleVertChunk = false;
     public boolean sampleStructures = false;
