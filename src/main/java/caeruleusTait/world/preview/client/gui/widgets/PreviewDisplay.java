@@ -28,7 +28,6 @@ import net.minecraft.core.QuartPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.NoiseRouterData;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.material.MapColor;
@@ -320,6 +319,29 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
         );
     }
 
+    private boolean isInsideCircularWorldBorder(int blockX, int blockZ) {
+        if (!config.enableCircularWorldBorder) {
+            return true;
+        }
+
+        final long radius = config.circularWorldBorderRadius();
+        final long radiusSq = radius * radius;
+        final long distSq = (long) blockX * blockX + (long) blockZ * blockZ;
+        return distSq <= radiusSq;
+    }
+
+    private boolean isOnCircularWorldBorder(int blockX, int blockZ) {
+        if (!config.enableCircularWorldBorder) {
+            return false;
+        }
+
+        final long radius = config.circularWorldBorderRadius();
+        final long distSq = (long) blockX * blockX + (long) blockZ * blockZ;
+        final long innerRadius = Math.max(0L, radius - scaleBlockPos);
+        final long outerRadius = radius + scaleBlockPos;
+        return distSq >= innerRadius * innerRadius && distSq <= outerRadius * outerRadius;
+    }
+
     private void putHoverStructEntry(TextureCoordinate pos, StructHoverHelperEntry entry) {
         int cellX = Math.max(0, Math.min(hoverHelperGridWidth - 1, pos.x / hoverHelperGridCellSize));
         int cellZ = Math.max(0, Math.min(hoverHelperGridHeight - 1, pos.z / hoverHelperGridCellSize));
@@ -430,47 +452,57 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
                     // Read the biome data
                     short rawData = r.dataSection.get(x, z);
                     int color = 0xFF000000;
-                    switch (renderSettings.mode) {
-                        case BIOMES -> {
-                            if (rawData >= 0) {
-                                color = selectedBiomeId >= 0 || highlightCaves ? colorMapGrayScale[rawData] : colorMap[rawData];
-                                if (selectedBiomeId == rawData || (highlightCaves && cavesMap[rawData])) {
-                                    color = colorMap[rawData];
+                    final int blockX = QuartPos.toBlock(r.dataSection.quartX() + x);
+                    final int blockZ = QuartPos.toBlock(r.dataSection.quartZ() + z);
+                    final boolean inBorder = isInsideCircularWorldBorder(blockX, blockZ);
+                    final boolean onBorder = isOnCircularWorldBorder(blockX, blockZ);
+                    if (inBorder) {
+                        switch (renderSettings.mode) {
+                            case BIOMES -> {
+                                if (rawData >= 0) {
+                                    color = selectedBiomeId >= 0 || highlightCaves ? colorMapGrayScale[rawData] : colorMap[rawData];
+                                    if (selectedBiomeId == rawData || (highlightCaves && cavesMap[rawData])) {
+                                        color = colorMap[rawData];
+                                    }
+                                    workingVisibleBiomes[rawData] += 1;
                                 }
-                                workingVisibleBiomes[rawData] += 1;
+                            }
+                            case HEIGHTMAP -> {
+                                if (rawData > Short.MIN_VALUE) {
+                                    color = heightColorMap[rawData - dataProvider.yMin()];
+                                }
+                            }
+                            case INTERSECTIONS -> {
+                                if (rawData >= 0) {
+                                    // Main y-intersection
+                                    color = MapColor.byId(rawData).col;
+                                    color = textureColor(color == 0 ? 0xFFFFFF : color);
+                                } else if(rawData > Short.MIN_VALUE) {
+                                    // See through one layer of air
+                                    color = MapColor.byId(-rawData).col;
+                                    color = highlightColor(textureColor(color == 0 ? 0xFFFFFF : color));
+                                }
+                            }
+                            case NOISE_TEMPERATURE, NOISE_HUMIDITY, NOISE_CONTINENTALNESS, NOISE_EROSION, NOISE_DEPTH, NOISE_WEIRDNESS -> {
+                                if (rawData > Short.MIN_VALUE) {
+                                    final float data = ((float) rawData) / ((float) Short.MAX_VALUE);
+                                    final int idx = Math.min(1023, Math.max(0, 512 + (int) (data * 512)));
+                                    color = noiseColorMap[idx];
+                                }
+                            }
+                            case NOISE_PEAKS_AND_VALLEYS -> {
+                                if (rawData > Short.MIN_VALUE) {
+                                    final float data = ((float) rawData) / 0.75f / ((float) Short.MAX_VALUE);
+                                    final float pvData = NoiseRouterData.peaksAndValleys(Math.min(1.0f, Math.max(-1.0f, data)));
+                                    final int idx = Math.min(1023, Math.max(0, 512 + (int) (pvData * 512)));
+                                    color = noiseColorMap[idx];
+                                }
                             }
                         }
-                        case HEIGHTMAP -> {
-                            if (rawData > Short.MIN_VALUE) {
-                                color = heightColorMap[rawData - dataProvider.yMin()];
-                            }
-                        }
-                        case INTERSECTIONS -> {
-                            if (rawData >= 0) {
-                                // Main y-intersection
-                                color = MapColor.byId(rawData).col;
-                                color = textureColor(color == 0 ? 0xFFFFFF : color);
-                            } else if(rawData > Short.MIN_VALUE) {
-                                // See through one layer of air
-                                color = MapColor.byId(-rawData).col;
-                                color = highlightColor(textureColor(color == 0 ? 0xFFFFFF : color));
-                            }
-                        }
-                        case NOISE_TEMPERATURE, NOISE_HUMIDITY, NOISE_CONTINENTALNESS, NOISE_EROSION, NOISE_DEPTH, NOISE_WEIRDNESS -> {
-                            if (rawData > Short.MIN_VALUE) {
-                                final float data = ((float) rawData) / ((float) Short.MAX_VALUE);
-                                final int idx = Math.min(1023, Math.max(0, 512 + (int) (data * 512)));
-                                color = noiseColorMap[idx];
-                            }
-                        }
-                        case NOISE_PEAKS_AND_VALLEYS -> {
-                            if (rawData > Short.MIN_VALUE) {
-                                final float data = ((float) rawData) / 0.75f / ((float) Short.MAX_VALUE);
-                                final float pvData = NoiseRouterData.peaksAndValleys(Math.min(1.0f, Math.max(-1.0f, data)));
-                                final int idx = Math.min(1023, Math.max(0, 512 + (int) (pvData * 512)));
-                                color = noiseColorMap[idx];
-                            }
-                        }
+                    }
+
+                    if (onBorder) {
+                        color = 0xFFFF0000;
                     }
 
                     // Draw
@@ -508,6 +540,9 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
             for (PreviewSection.PreviewStruct structure : r.structureSection.structures()) {
                 short id = structure.structureId();
                 TextureCoordinate texCenter = blockToTexture(structure.center());
+                if (!isInsideCircularWorldBorder(structure.center().getX(), structure.center().getZ())) {
+                    continue;
+                }
                 IconData iconData = structureIcons[id];
                 NativeImage icon = iconData.img;
                 DynamicTexture iconTexture = iconData.texture;
@@ -579,6 +614,10 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
      * Render the player and spawn icons in double the size
      */
     private void renderStickyIcon(IconData iconData, BlockPos pos) {
+        if (!isInsideCircularWorldBorder(pos.getX(), pos.getZ())) {
+            return;
+        }
+
         final double guiScale = minecraft.getWindow().getGuiScale();
         final NativeImage icon = iconData.img;
 
@@ -640,6 +679,13 @@ public class PreviewDisplay extends AbstractWidget implements AutoCloseable {
         int quartX = QuartPos.fromBlock(xMin + xPos);
         int quartY = QuartPos.fromBlock(center.getY());
         int quartZ = QuartPos.fromBlock(zMin + zPos);
+        if (!isInsideCircularWorldBorder(QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ))) {
+            return new HoverInfo(
+                    xMin + xPos, center.getY(), zMin + zPos, null, Short.MIN_VALUE,
+                    Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN
+            );
+        }
+
         short biome = workManager.previewStorage().getRawData4(quartX, quartY, quartZ, PreviewStorage.FLAG_BIOME);
         short height = workManager.previewStorage().getRawData4(quartX, 0, quartZ, PreviewStorage.FLAG_HEIGHT);
 

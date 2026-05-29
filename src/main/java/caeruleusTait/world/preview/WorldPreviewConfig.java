@@ -5,6 +5,10 @@ import java.util.List;
 
 public class WorldPreviewConfig {
 
+    public static final int MIN_CIRCULAR_WORLD_BORDER_RADIUS = 10000;
+    public static final int MAX_CIRCULAR_WORLD_BORDER_RADIUS = 20000;
+    public static final int DEFAULT_CIRCULAR_WORLD_BORDER_RADIUS = MIN_CIRCULAR_WORLD_BORDER_RADIUS;
+
     public List<String> savedSeeds = new ArrayList<>();
 
     public boolean showInPauseMenu = true;
@@ -23,9 +27,20 @@ public class WorldPreviewConfig {
     public boolean cacheInGame = true;
     public boolean cacheInNew = false;
     public boolean enableCompression = true;
+    public boolean enableCircularWorldBorder = false;
+    public int circularWorldBorderRadius = DEFAULT_CIRCULAR_WORLD_BORDER_RADIUS;
     public String colorMap = "world_preview:inferno";
 
     private int numThreads = Math.max(Runtime.getRuntime().availableProcessors() - 1, 1);
+
+    public int circularWorldBorderRadius() {
+        setCircularWorldBorderRadius(circularWorldBorderRadius);
+        return circularWorldBorderRadius;
+    }
+
+    public void setCircularWorldBorderRadius(int circularWorldBorderRadius) {
+        this.circularWorldBorderRadius = Math.max(MIN_CIRCULAR_WORLD_BORDER_RADIUS, Math.min(MAX_CIRCULAR_WORLD_BORDER_RADIUS, circularWorldBorderRadius));
+    }
 
     public int numThreads() {
         setNumThreads(numThreads);

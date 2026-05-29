@@ -13,11 +13,15 @@ import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_BG;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_BG_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_CONTROLS;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_CONTROLS_TOOLTIP;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_CIRCULAR_BORDER;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_CIRCULAR_BORDER_RADIUS_TOOLTIP;
+import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_CIRCULAR_BORDER_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_FC;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_FC_TOOLTIP;
 import static caeruleusTait.world.preview.client.WorldPreviewComponents.SETTINGS_GENERAL_FRAMETIME;
@@ -58,6 +62,17 @@ public class GeneralTab extends GridLayoutTab {
                 threadCounts.get(cfg.numThreads() - 1),
                 x -> cfg.setNumThreads(x.value)
         );
+        List<BorderRadius> borderRadiusValues = IntStream
+                .rangeClosed(WorldPreviewConfig.MIN_CIRCULAR_WORLD_BORDER_RADIUS, WorldPreviewConfig.MAX_CIRCULAR_WORLD_BORDER_RADIUS)
+                .mapToObj(BorderRadius::new)
+                .toList();
+        SelectionSlider<BorderRadius> borderRadiusSlider = new SelectionSlider<>(
+                0, 0,
+                LINE_WIDTH, LINE_HEIGHT,
+                borderRadiusValues,
+                borderRadiusValues.get(cfg.circularWorldBorderRadius() - WorldPreviewConfig.MIN_CIRCULAR_WORLD_BORDER_RADIUS),
+                x -> cfg.setCircularWorldBorderRadius(x.value)
+        );
 
         Checkbox cbBg     = Checkbox.builder(SETTINGS_GENERAL_BG,           minecraft.font).selected(cfg.backgroundSampleVertChunk).onValueChange((box, val) -> cfg.backgroundSampleVertChunk = val).build();
         Checkbox cbFc     = Checkbox.builder(SETTINGS_GENERAL_FC,           minecraft.font).selected(cfg.buildFullVertChunk       ).onValueChange((box, val) -> cfg.buildFullVertChunk        = val).build();
@@ -65,18 +80,28 @@ public class GeneralTab extends GridLayoutTab {
         Checkbox cbHm     = Checkbox.builder(SETTINGS_GENERAL_HEIGHTMAP,    minecraft.font).selected(cfg.sampleHeightmap          ).onValueChange((box, val) -> cfg.sampleHeightmap           = val).build();
         Checkbox cbInt    = Checkbox.builder(SETTINGS_GENERAL_INTERSECT,    minecraft.font).selected(cfg.sampleIntersections      ).onValueChange((box, val) -> cfg.sampleIntersections       = val).build();
         Checkbox cbNoise  = Checkbox.builder(SETTINGS_GENERAL_NOISE,        minecraft.font).selected(cfg.storeNoiseSamples        ).onValueChange((box, val) -> cfg.storeNoiseSamples         = val).build();
+        Checkbox cbCircularBorder = Checkbox.builder(SETTINGS_GENERAL_CIRCULAR_BORDER, minecraft.font)
+                .selected(cfg.enableCircularWorldBorder)
+                .onValueChange((box, val) -> {
+                    cfg.enableCircularWorldBorder = val;
+                    borderRadiusSlider.active = val;
+                })
+                .build();
         Checkbox cbCtrl   = Checkbox.builder(SETTINGS_GENERAL_CONTROLS,     minecraft.font).selected(cfg.showControls             ).onValueChange((box, val) -> cfg.showControls              = val).build();
         Checkbox cbFt     = Checkbox.builder(SETTINGS_GENERAL_FRAMETIME,    minecraft.font).selected(cfg.showFrameTime            ).onValueChange((box, val) -> cfg.showFrameTime             = val).build();
         Checkbox cbPause  = Checkbox.builder(SETTINGS_GENERAL_SHOW_IN_MENU, minecraft.font).selected(cfg.showInPauseMenu          ).onValueChange((box, val) -> cfg.showInPauseMenu           = val).build();
         Checkbox cbPlayer = Checkbox.builder(SETTINGS_GENERAL_SHOW_PLAYER,  minecraft.font).selected(cfg.showPlayer               ).onValueChange((box, val) -> cfg.showPlayer                = val).build();
 
+        borderRadiusSlider.active = cfg.enableCircularWorldBorder;
         threadsSlider.setTooltip(Tooltip.create(SETTINGS_GENERAL_THREADS_TOOLTIP));
+        borderRadiusSlider.setTooltip(Tooltip.create(SETTINGS_GENERAL_CIRCULAR_BORDER_RADIUS_TOOLTIP));
         cbFc.setTooltip(Tooltip.create(SETTINGS_GENERAL_FC_TOOLTIP));
         cbBg.setTooltip(Tooltip.create(SETTINGS_GENERAL_BG_TOOLTIP));
         cbStruct.setTooltip(Tooltip.create(SETTINGS_GENERAL_STRUCT_TOOLTIP));
         cbHm.setTooltip(Tooltip.create(SETTINGS_GENERAL_HEIGHTMAP_TOOLTIP));
         cbInt.setTooltip(Tooltip.create(SETTINGS_GENERAL_INTERSECT_TOOLTIP));
         cbNoise.setTooltip(Tooltip.create(SETTINGS_GENERAL_NOISE_TOOLTIP));
+        cbCircularBorder.setTooltip(Tooltip.create(SETTINGS_GENERAL_CIRCULAR_BORDER_TOOLTIP));
         cbCtrl.setTooltip(Tooltip.create(SETTINGS_GENERAL_CONTROLS_TOOLTIP));
         cbFt.setTooltip(Tooltip.create(SETTINGS_GENERAL_FRAMETIME_TOOLTIP));
         cbPause.setTooltip(Tooltip.create(SETTINGS_GENERAL_SHOW_IN_MENU_TOOLTIP));
@@ -91,6 +116,8 @@ public class GeneralTab extends GridLayoutTab {
         rowHelper.addChild(cbHm, 1);
         rowHelper.addChild(cbInt, 1);
         rowHelper.addChild(cbNoise, 1);
+        rowHelper.addChild(cbCircularBorder, 2);
+        rowHelper.addChild(borderRadiusSlider, 2);
         rowHelper.addChild(new WGLabel(minecraft.font, 0, 0, 200, LINE_HEIGHT / 10, WGLabel.TextAlignment.CENTER, Component.literal(""), 0xFFFFFF), 2);
         rowHelper.addChild(cbCtrl);
         rowHelper.addChild(cbFt);
@@ -108,6 +135,19 @@ public class GeneralTab extends GridLayoutTab {
         @Override
         public Component message() {
             return Component.translatable("world_preview.settings.general.threads", value);
+        }
+    }
+
+    public static class BorderRadius implements SelectionSlider.SelectionValues {
+        public final int value;
+
+        public BorderRadius(int value) {
+            this.value = value;
+        }
+
+        @Override
+        public Component message() {
+            return Component.translatable("world_preview.settings.general.circular_border.radius", value);
         }
     }
 }
